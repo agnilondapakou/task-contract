@@ -1,107 +1,73 @@
-import { useState } from 'react'
-import './App.css'
-import abi from '../abi.json'
-import { ethers } from 'ethers'
-import { BrowserProvider } from 'ethers'
-
-const contractAddress = "0x34e01672CBE852658c4727f52358992C9FD30a0c"
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import abi from '../abi.json';
+import './App.css';
+import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 
 function App() {
-  const [web3, setWeb3] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [account, setAccount] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [taskTitle, setTaskTitle] = useState("");
   const [taskText, setTaskText] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [isDeleted, setIsDeleted] = useState(false);
+  const [taskId, setTaskId] = useState(0);
   const [message, setMessage] = useState("");
+  const [task, setTask] = useState([]);
+  const contractAddress = "0x34e01672CBE852658c4727f52358992C9FD30a0c";
 
-  async function requestAccounts() {
+  async function requestAcount() {
     await window.ethereum.request({ method: 'eth_requestAccounts' });
   }
 
-  async function fetchTasks() {
+  async function addTask() {
+    if(typeof window.ethereum !== "undefined") {
+      await requestAcount();
+    }
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(contractAddress, abi, signer);
+
     try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, abi, signer);
-      const taskCount = await contract.taskCount();
-      const tasks = [];
-      for (let i = 0; i < taskCount; i++) {
-        const task = await contract.tasks(i);
-        tasks.push({
-          title: task.title,
-          text: task.text,
-          completed: task.completed
-        });
-      }
-      setTasks(tasks);
-    } catch (error) {
-      setMessage("Error fetching tasks");
+      const transaction = await contract.addTask(taskText, taskTitle, isDeleted);
+      const receipt = await transaction.wait();
+      setMessage("Transaction confirmed in block " + receipt)
+    } catch (e) {
+      setMessage("Error adding task: " + e)
     }
   }
 
-  async function createTask() {
-    try {
-      await contract.createTask(taskTitle, taskText);
-      fetchTasks();
-    } catch (error) {
-      setMessage("Error creating task");
-  }
+  async function getMyTask() {
+    if(typeof window.ethereum !== "undefined") {
+      await requestAcount();
+    }
 
-  async function toggleTaskCompleted(taskId) {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const myContract = new ethers.Contract(contractAddress, abi, provider);
+
     try {
-      await contract.toggleTaskCompleted(taskId);
-      fetchTasks();
-    } catch (error) {
-      setMessage("Error toggling task completed");
+      const task = await myContract.getMyTask({fron : provider.getSigner()});
+      setTask(task);
+      setMessage("Task has been fetched", task);
+    } catch (e) {
+      setMessage("Error fetching task: " + e.message);
     }
   }
-
-  async function deleteTask(taskId) {
-    try {
-      await contract.deleteTask(taskId);
-      fetchTasks();
-    } catch (error) {
-      setMessage("Error deleting task");
-    }
-  }
+  
 
   return (
     <div className="App">
       <h1>Task List</h1>
-      <button onClick={requestAccounts}>Connect</button>
-      <button onClick={fetchTasks}>Fetch Tasks</button>
-      <input
-        type="text"
-        placeholder="Task Title"
-        value={taskTitle}
-        onChange={(e) => setTaskTitle(e.target.value)}
-      />
-      <input
-        type="text"
-        placeholder="Task Text"
-        value={taskText}
-        onChange={(e) => setTaskText(e.target.value)}
-      />
-      <button onClick={createTask}>Create Task</button>
-      <p>{message}</p>
-      <ul>
-        {tasks.map((task, index) => (
-          <li key={index}>
-            <input
-              type="checkbox"
-              checked={task.completed}
-              onChange={() => toggleTaskCompleted(index)}
-            />
-            <span>{task.title}</span>
-            <span>{task.text}</span>
-            <button onClick={() => deleteTask(index)}>Delete</button>
-          </li>
-        ))}
-      </ul>
+      <input type="text" placeholder="Task Title" onChange={(e) => setTaskTitle(e.target.value)} />
+      <input type="text" placeholder="Task Text" onChange={(e) => setTaskText(e.target.value)} />
+      <select onChange={(e) => setIsDeleted(e.target.value)}>
+        <option value="false">Not Deleted</option>
+        <option value="true">Deleted</option>
+      </select>
+      <button onClick={addTask}>Add task</button>
+      <button onClick={getMyTask}>Show my task</button>
+      <p>Output : {message}</p>
     </div>
-  )
-}
+  );
 }
 
-export default App
+export default App;
